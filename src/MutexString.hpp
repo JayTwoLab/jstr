@@ -69,8 +69,11 @@ public:
 public:
     // ===== 생성/대입 =====
     MutexString() = default;                 // 빈 문자열
-    explicit MutexString(std::string s);
-    explicit MutexString(const char* s);
+
+    // ⬇⬇⬇ explicit 제거 → "j2::MutexString ms = "start";" / "jstr ms = "start";" 가능
+    MutexString(std::string s);
+    MutexString(const char* s);
+
     MutexString(const MutexString& other);
     MutexString(MutexString&& other) noexcept;
     MutexString& operator=(const MutexString& other);
@@ -254,3 +257,5 @@ inline void swap(MutexString& a, MutexString& b) { a.swap(b); }
 
 } // namespace j2
 
+// alias: 전역에서 짧게 사용하고 싶을 때 (예: jstr ms = "start";)
+using jstr = j2::MutexString;

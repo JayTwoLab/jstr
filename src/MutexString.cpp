@@ -9,10 +9,10 @@ thread_local const MutexString* MutexString::tls_owner_ = nullptr;
 // ================= Locked 구현 =================
 MutexString::Locked::Locked(std::string& s, std::mutex& m, const MutexString* owner)
     : s_(&s)
+    , lock_(m)                 // ✅ lock_을 owner_보다 먼저 초기화
 #ifndef NDEBUG
     , owner_(owner)
 #endif
-    , lock_(m)
 {
 #ifndef NDEBUG
     // guard 수명 전체 동안 동일 객체의 다른 멤버 호출을 막기 위해 마크 설정
@@ -24,10 +24,10 @@ MutexString::Locked::Locked(std::string& s, std::mutex& m, const MutexString* ow
 
 MutexString::Locked::Locked(const std::string& s, std::mutex& m, const MutexString* owner)
     : cs_(&s)
+    , lock_(m)                 // ✅ lock_을 owner_보다 먼저 초기화
 #ifndef NDEBUG
     , owner_(owner)
 #endif
-    , lock_(m)
 {
 #ifndef NDEBUG
     assert(MutexString::tls_owner_ != owner_ && "동일 객체 재진입 금지(guard 보유 중 ms.* 호출)");
@@ -560,4 +560,3 @@ MutexString::CStrGuard MutexString::c_str() const {
 }
 
 } // namespace j2
-
