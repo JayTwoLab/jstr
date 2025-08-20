@@ -15,18 +15,20 @@
 - 락 가드 범위 밖으로 `포인터(pointer)`/`반복자(iterator)`/`참조(reference)`를 **절대** 내보내지 마십시오.
 
 - 가드로 얻은 `std::string`의 포인터/반복자/참조 사용
-  - ```cpp
+  - 포인터
+    ```cpp
       g->c_str()
       g->data()
     ```
-  - ```cpp
+  - 반복자
+    ```cpp
       g->begin()
       g->end()
       g->rbegin()
       g->rend() 
     ```
     등 모든 반복자
-  - `non-const` 가드에서 `char&`를 돌려주는 접근
+  - 참조 : `non-const` 가드에서 `char&`를 돌려주는 접근
     ```cpp
       g->operator[](i)
       g->at(i)
