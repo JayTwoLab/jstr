@@ -1,4 +1,4 @@
-# 멀티스레드에서 `j2::MutexString` 안전 사용 가이드
+# 멀티스레드에서  `jstr` <sub> (=`j2::MutexString`) </sub> 안전 사용 가이드
 
 ## 1. 개요
 
@@ -15,11 +15,34 @@
 - 락 가드 범위 밖으로 `포인터(pointer)`/`반복자(iterator)`/`참조(reference)`를 **절대** 내보내지 마십시오.
 
 - 가드로 얻은 `std::string`의 포인터/반복자/참조 사용
-  - `g->c_str()`, `g->data()`
-  - `g->begin()/end()/rbegin()/rend()` 등 모든 반복자
-  - 비-const 가드에서 `char&`를 돌려주는 접근(`g->operator[](i)`, `g->at(i)`, `g->front()`, `g->back()`)
+  - ```cpp
+      g->c_str()
+      g->data()
+    ```
+  - ```cpp
+      g->begin()
+      g->end()
+      g->rbegin()
+      g->rend() 
+    ```
+    등 모든 반복자
+  - `non-const` 가드에서 `char&`를 돌려주는 접근
+    ```cpp
+      g->operator[](i)
+      g->at(i)
+      g->front()
+      g->back()
+    ```
+  
 - 여러 단계를 **한 락 범위에서 원자적으로** 처리할 때
-   - (예: `auto g = ms.guard(); if (g->find("x") != npos) g->replace(...);`)
+   - 예:
+    ```cpp
+      {
+       auto g = ms.guard();
+       if (g->find("x") != npos)
+         g->replace(...);
+      }
+    ```
 
 > 주: 이러한 포인터·반복자 계열은 `MutexString`의 공개 API로 직접 노출되지 않으며, **가드를 통해서만** 접근하도록 설계되어 있습니다.
 
@@ -37,8 +60,19 @@
 
 ### 3.1 읽기 계열
 
-- 비교: `operator==(const std::string&) const`, `operator==(const char*) const` *(및 `!=`)*
-- 크기/상태: `size()`, `length()`, `empty()`, `capacity()`, `max_size()`
+- 비교
+   ```cpp
+     operator==(const std::string&) const
+     operator==(const char*) const // (및 `!=`)
+   ```
+- 크기/상태
+   ```cpp
+     size()
+     length()
+     empty()
+     capacity()
+     max_size()
+   ```
 - 요소 값 조회(값 반환): `at(size_t) const`, `operator[](size_t) const`, `front() const`, `back() const`
 - 부분/복사/비교: `substr(pos,count)`, `copy(char* dest,count,pos)`, `compare(...)` 오버로드
 - 검색: `find(...)`, `rfind(...)`, `find_first_of(...)`, `find_last_of(...)`,
