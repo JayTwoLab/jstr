@@ -16,7 +16,7 @@ MutexString::Locked::Locked(std::string& s, std::mutex& m, const MutexString* ow
 {
 #ifndef NDEBUG
     // guard 수명 전체 동안 동일 객체의 다른 멤버 호출을 막기 위해 마크 설정
-    assert(MutexString::tls_owner_ != owner_ && "동일 객체 재진입 금지(guard 보유 중 ms.* 호출)");
+    assert(MutexString::tls_owner_ != owner_ && "동일 객체 no reentrancy(guard 보유 중 ms.* 호출)");
     MutexString::tls_owner_ = owner_;
     mark_set_ = true;
 #endif
@@ -30,7 +30,7 @@ MutexString::Locked::Locked(const std::string& s, std::mutex& m, const MutexStri
 #endif
 {
 #ifndef NDEBUG
-    assert(MutexString::tls_owner_ != owner_ && "동일 객체 재진입 금지(guard 보유 중 ms.* 호출)");
+    assert(MutexString::tls_owner_ != owner_ && "동일 객체 no reentrancy(guard 보유 중 ms.* 호출)");
     MutexString::tls_owner_ = owner_;
     mark_set_ = true;
 #endif
@@ -61,7 +61,7 @@ void MutexString::Locked::unlock() {
 }
 bool MutexString::Locked::owns_lock() const { return lock_.owns_lock(); }
 
-// 보호 메서드: 가드 수명 동안만 안전
+// protected 메서드: during guard lifetime만 안전
 const char* MutexString::Locked::guard_cstr() const {
     return (cs_ ? cs_ : s_)->c_str();
 }
@@ -551,7 +551,7 @@ MutexString::Locked MutexString::synchronize() const {
     return Locked{s_, m_, this};
 }
 
-// ===== 보호: RAII c_str() (외부에 노출 안 함) =====
+// ===== protected: RAII c_str() (외부에 노출 안 함) =====
 MutexString::CStrGuard MutexString::c_str() const {
 #ifndef NDEBUG
     assert_not_reentrant_();

@@ -6,9 +6,9 @@
 
 using namespace std::chrono_literals;
 
-// C API 흉내(예시)
+// C API mimic(example)
 static void c_api_sink(const char* p) {
-    (void)p; // 데모에서는 출력 생략
+    (void)p; // demo에서는 출력 생략
 }
 
 void testAtomicity();
@@ -19,17 +19,17 @@ int main() {
     // j2::MutexString = jstr 클래스의 기본 멤버 테스트
     testJstr();
 
-    // 데모: 두 스레드가 랜덤하게 문자열 읽기/쓰기 수행
+    // demo: two threads randomly read/write strings
     testAtomicity();
 
     return 0;
 }
 
 //---------------------------------------------------------------------------
-// 데모: 두 스레드가 랜덤하게 문자열 읽기/쓰기 수행
-// - 외부에서는 c_str()/guard_cstr()가 protected 이므로 직접 호출 불가
-// - 안전한 사용법: (1) 스냅샷 복사 ms.str()
-//                  (2) 락 범위 가드로 std::string API 사용: auto g=ms.guard(); g->c_str();
+// demo: two threads randomly read/write strings
+// - externally, c_str()/guard_cstr()가 protected 이므로 cannot be called directly
+// - safe usage: (1) snapshot copy ms.str()
+//                  (2) lock guard scope로 std::string API 사용: auto g=ms.guard(); g->c_str();
 void testAtomicity() {
 
     j2::MutexString ms("start"); // jstr ms("start"); 와 동일함.
@@ -52,17 +52,17 @@ void testAtomicity() {
             if (ms == "hello") {
                 ++hello_hits;
 
-                // 2-a) 스냅샷 복사로 C API 호출 (항상 안전)
+                // 2-a) snapshot copy로 C API 호출 (항상 안전)
                 std::string snap = ms.str();
                 c_api_sink(snap.c_str());
 
-                // 2-b) 또는 가드를 잡고 std::string::c_str() 사용 (가드 수명 동안만 안전)
+                // 2-b) 또는 가드를 잡고 std::string::c_str() 사용 (during guard lifetime만 안전)
                 {
                     auto g = ms.guard(); // 가드 생성
-                    c_api_sink(g->c_str()); // 주의: 가드가 파괴되면 포인터는 더 이상 안전하지 않음
+                    c_api_sink(g->c_str()); // note: 가드가 파괴되면 포인터는 더 이상 안전하지 않음
                 }
 
-                // ⚠ 아래는 디버그에서 assert로 잡힙니다(교착 예방):
+                // ⚠ 아래는 caught by assert in debug mode(deadlock prevention):
                 // ms.append("X"); // with()/guard() 범위 안에서 다시 ms.* 호출 금지
             }
 
@@ -76,7 +76,7 @@ void testAtomicity() {
 
     std::cout << "최종(ms): " << ms.str() << "\n";
 
-    std::cout << "\n[주의]\n"
+    std::cout << "\n[note]\n"
               << " - ms.c_str() / guard().guard_cstr() 는 protected 입니다.\n"
               << " - guard 수명 동안 동일 객체의 다른 멤버 호출은 디버그에서 assert로 차단됩니다.\n"
               << " - 포인터/반복자/참조를 가드 범위 밖으로 넘기지 마세요.\n";
@@ -84,12 +84,12 @@ void testAtomicity() {
 
 //---------------------------------------------------------------------------
 // std::string 의 기본 멤버와 유사한 기능들을 j2::MutexString 로 폭넓게 시연
-// testJstr() 내부에서는 멀티 쓰레드 관련 테스틑 없음.
+// testJstr() 내부에서는 no multi-thread related tests.
 void testJstr() {
 
-    std::cout << "\n===== testJstr: j2::MutexString 기본 기능 테스트 =====\n";
+    std::cout << "\n===== testJstr: j2::MutexString basic functionality test =====\n";
 
-    // 생성/복사 초기화(암시적 변환 허용)
+    // construction/copy initialization(암시적 변환 허용)
     // jstr 는 j2::MutexString 와 동일함.
     jstr ms = "start"; // 5글자
     std::cout << "초기값: \"" << ms.str() << "\" size=" << ms.size()
@@ -110,25 +110,25 @@ void testJstr() {
     // append/+= 후: "start plus more"
 
     // insert (문자열/문자 반복/char*)
-    ms.insert(0, "["); // 맨 앞에 [ 삽입
-    ms.push_back(']'); // 끝에 ] 추가
+    ms.insert(0, "["); // insert at the beginning [ 삽입
+    ms.push_back(']'); // append at the end ] 추가
     ms.insert(1, 3, '*'); // 인덱스 1 위치에 '*' 3개
-    ms.insert(ms.size(), " tail"); // 끝에 C-문자열인 " tail" 삽입
+    ms.insert(ms.size(), " tail"); // append at the end C-문자열인 " tail" 삽입
     std::cout << "insert/push_back 후: \"" << ms.str() << "\"\n";
     // insert/push_back 후: "[***start plus more] tail"
 
     // set/at/operator[]/front/back (게터/세터)
-    char old0 = ms[0]; // 읽기 전용 인덱서
+    char old0 = ms[0]; // read-only indexer
     ms.set(0, '{'); // 0번 문자 수정
     char f_before = ms.front();
     ms.front('(');
     char b_before = ms.back();
     ms.back(')');
-    std::cout << "인덱싱/앞뒤: old[0]='" << old0
+    std::cout << "인덱싱/front/back: old[0]='" << old0
               << "' front:" << f_before << "->" << ms.front()
               << " back:" << b_before  << "->" << ms.back()
-              << " 결과=\"" << ms.str() << "\"\n";
-    // 인덱싱/앞뒤: old[0]='[' front:{->( back:l->) 결과="(***start plus more] tai)"
+              << " result=\"" << ms.str() << "\"\n";
+    // 인덱싱/front/back: old[0]='[' front:{->( back:l->) result="(***start plus more] tai)"
 
     // find / rfind / find_first_of / find_last_of / find_first_not_of / find_last_not_of
     std::size_t pos_plus = ms.find("plus");
@@ -156,11 +156,11 @@ void testJstr() {
     if (ms.size() >= 5) {
         ms.replace(1, 5, "BEGIN");     // 1~5 구간을 "BEGIN"으로
     }
-    ms.replace(0, 0, 2, '#');          // 맨 앞에 '#' 2개 삽입
+    ms.replace(0, 0, 2, '#');          // insert at the beginning '#' 2개 삽입
     std::cout << "replace 후: \"" << ms.str() << "\"\n";
     // replace 후: "##(BEGINart plus more] tai)"
 
-    // erase (존재 시 공백 하나 삭제)
+    // erase (delete one space if exists)
     auto sp = ms.find(' ');
     if (sp != std::string::npos) ms.erase(sp, 1);
     std::cout << "erase(space 1개) 후: \"" << ms.str() << "\"\n";
@@ -220,7 +220,7 @@ void testJstr() {
     // with() 후: "##(BEGINartplus more] tai)!!! [WITH]"
 
     // insert(반복 문자) / replace(n, ch) / erase(0부터 끝까지)
-    ms.insert(0, 3, '*');          // 맨 앞에 '*' 3개
+    ms.insert(0, 3, '*');          // insert at the beginning '*' 3개
     ms.replace(0, 3, 2, '#');      // 앞 3개를 '#' 2개로 대체
     ms.erase(0);                   // 0부터 끝까지 삭제
     std::cout << "insert/replace/erase(0) 후: \"" << ms.str() << "\"\n";

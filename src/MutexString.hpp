@@ -5,36 +5,36 @@
 #include <type_traits>
 #include <cassert>
 
-// j2 네임스페이스
+// j2 namespace
 namespace j2 {
 
-// 스레드 안전 문자열 래퍼
-// - 멤버는 오직 std::string, std::mutex 두 개만 유지
+// thread-safe string wrapper
+// - only members are std::string, std::mutex 두 개만 유지
 // - std::string API는 가능한 한 동일/유사 시그니처로 제공
-// - 포인터/반복자/참조 직접 반환은 위험하므로 가드(guard) 또는 스냅샷(str)로만 접근
+// - returning pointer/iterator/reference directly is dangerous, so 가드(guard) 또는 스냅샷(str)로만 접근
 class MutexString {
 public:
-    // 락이 걸린 뷰(가드): 수명 동안 뮤텍스를 잡고 내부 std::string 에 직접 접근
+    // locked view(가드): 수명 동안 뮤텍스를 잡고 내부 std::string 에 직접 접근
     class Locked {
     public:
-        // ⚠️ 재진입 감지를 위해 owner(보호 대상 객체) 포인터를 함께 전달받습니다.
+        // ⚠️ reentrancy detection를 위해 owner(protected 대상 객체) 포인터를 함께 전달받습니다.
         Locked(std::string& s, std::mutex& m, const MutexString* owner);
         Locked(const std::string& s, std::mutex& m, const MutexString* owner);
-        ~Locked(); // 디버그 모드에서 재진입 마크 해제
+        ~Locked(); // release reentrancy mark in debug mode
 
-        // 가드 수명 동안 내부 std::string 전체 API 사용 가능
+        // during guard lifetime 내부 std::string 전체 API 사용 가능
         std::string* operator->();
         const std::string* operator->() const;
         std::string& operator*();
         const std::string& operator*() const;
 
-        // 필요 시 조기 해제 및 상태 확인
+        // early unlock and status check if needed
         [[deprecated("unlock()는 특별한 경우가 아니면 사용을 지양하십시오. 가드 수명 범위를 좁히세요.")]]
         void unlock();
         bool owns_lock() const;
 
     protected:
-        // ⚠ 보호: 외부 코드에서 직접 포인터를 꺼내 쓰는 헬퍼를 차단(오남용 방지)
+        // ⚠ protected: 외부 코드에서 직접 포인터를 꺼내 쓰는 헬퍼를 차단(오남용 방지)
         const char* guard_cstr() const;  // == (cs_ ? cs_ : s_)->c_str()
 
         // 내부 상태
@@ -51,9 +51,9 @@ public:
         friend class MutexString; // MutexString 내부에서 접근 가능
     };
 
-    // RAII 포인터 가드(내부용)
+    // RAII pointer guard(internal use)
     // - get()/operator const char*() 제공
-    // - 객체 수명 동안 락 유지 → 함수 인자에 바로 넣어도 호출 동안 안전
+    // - keep lock during object lifetime → 함수 인자에 바로 넣어도 호출 동안 안전
     class CStrGuard {
     public:
         CStrGuard(const std::string& s, std::mutex& m);
@@ -68,7 +68,7 @@ public:
 
 public:
     // ===== 생성/대입 =====
-    MutexString() = default;                 // 빈 문자열
+    MutexString() = default;                 // empty string
 
     // ⬇⬇⬇ explicit 제거 → "j2::MutexString ms = "start";" / "jstr ms = "start";" 가능
     MutexString(std::string s);
@@ -103,7 +103,7 @@ public:
     void shrink_to_fit();
 
     // ===== 요소 접근(읽기 전용 값 반환) + 짧은 setter =====
-    // 주의: 참조 반환(operator[], at의 char&)은 안전 문제로 제공하지 않음
+    // note: 참조 반환(operator[], at의 char&)은 안전 문제로 제공하지 않음
     char at(std::size_t pos) const;
     char operator[](std::size_t pos) const;     // 읽기 전용 값 반환
     char front() const;                          // 게터
@@ -193,7 +193,7 @@ public:
     auto with_lock(Fn&& f) -> decltype(std::forward<Fn>(f)(std::declval<std::string&>())) {
 #ifndef NDEBUG
         assert_not_reentrant_();               // 같은 스레드의 재진입 방지
-        ReentrancyMark _rmk{this};             // with() 수명 동안 "이 객체 락 보유 중" 표시
+        ReentrancyMark _rmk{this};             // with() 수명 동안 "이 객체 while lock is held" 표시
 #endif
         std::scoped_lock lock(m_);
         return std::forward<Fn>(f)(s_);
@@ -225,22 +225,22 @@ public:
     [[nodiscard]] Locked guard() const { return synchronize(); }
 
 protected:
-    // ⚠ 보호: RAII c_str() 헬퍼도 외부에 노출하지 않음(오남용 방지)
+    // ⚠ protected: RAII c_str() 헬퍼도 외부에 노출하지 않음(오남용 방지)
     CStrGuard c_str() const;
 
     // 디버그 재진입 검사용 헬퍼/마크
 #ifndef NDEBUG
     static thread_local const MutexString* tls_owner_;
     void assert_not_reentrant_() const {
-        // 동일 스레드에서 이미 이 객체의 락 컨텍스트 안이라면 재진입 금지
-        assert(tls_owner_ != this && "재진입 감지: with()/guard() 범위 안에서 다시 ms.* 호출 금지. "
+        // 동일 스레드에서 이미 이 객체의 inside lock context이라면 no reentrancy
+        assert(tls_owner_ != this && "reentrancy detection: with()/guard() 범위 안에서 다시 ms.* 호출 금지. "
                                      "with() 내부에서는 넘겨준 std::string(s)만 조작하세요.");
     }
     struct ReentrancyMark {
         const MutexString* prev;
         ReentrancyMark(const MutexString* self) : prev(tls_owner_) {
             // 이미 다른 객체가 표시돼도, 동일 객체 재진입만 금지
-            assert(tls_owner_ != self && "동일 객체 재진입 금지");
+            assert(tls_owner_ != self && "동일 객체 no reentrancy");
             tls_owner_ = self;
         }
         ~ReentrancyMark() { tls_owner_ = prev; }
@@ -252,10 +252,10 @@ protected:
     mutable std::mutex m_;
 };
 
-// 비멤버 swap (ADL 대상)
+// non-member swap (ADL 대상)
 inline void swap(MutexString& a, MutexString& b) { a.swap(b); }
 
 } // namespace j2
 
-// alias: 전역에서 짧게 사용하고 싶을 때 (예: jstr ms = "start";)
+// alias: 전역에서 use shortly하고 싶을 때 (예: jstr ms = "start";)
 using jstr = j2::MutexString;
