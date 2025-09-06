@@ -1,5 +1,13 @@
 # Safe Usage Guide for `jstr` <sub>(=`j2::MutexString`)</sub> in Multi-threaded Environments
 
+---
+
+[Korean](README.ko.md)
+
+
+
+---
+
 ## 1. Overview
 
 - Even for read-only calls, using **pointers/iterators/references to the internal buffer** is dangerous.
