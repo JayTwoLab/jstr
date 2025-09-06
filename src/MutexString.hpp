@@ -9,56 +9,56 @@
 namespace j2 {
 
 // thread-safe string wrapper
-// - only members are std::string, std::mutex 두 개만 유지
-// - std::string API는 가능한 한 동일/유사 시그니처로 제공
-// - returning pointer/iterator/reference directly is dangerous, so 가드(guard) 또는 스냅샷(str)로만 접근
+// - only members are std::string and std::mutex
+// - std::string API is provided with identical/similar signatures as much as possible
+// - returning pointer/iterator/reference directly is dangerous, so access only via guard() or snapshot (str)
 class MutexString {
 public:
-    // locked view(가드): 수명 동안 뮤텍스를 잡고 내부 std::string 에 직접 접근
+    // locked view (guard): holds the mutex during lifetime and provides direct access to internal std::string
     class Locked {
     public:
-        // ⚠️ reentrancy detection를 위해 owner(protected 대상 객체) 포인터를 함께 전달받습니다.
+        // ⚠️ for reentrancy detection, the pointer to owner (protected target object) is also passed
         Locked(std::string& s, std::mutex& m, const MutexString* owner);
         Locked(const std::string& s, std::mutex& m, const MutexString* owner);
         ~Locked(); // release reentrancy mark in debug mode
 
-        // during guard lifetime 내부 std::string 전체 API 사용 가능
+        // internal std::string full API can be used during guard lifetime
         std::string* operator->();
         const std::string* operator->() const;
         std::string& operator*();
         const std::string& operator*() const;
 
         // early unlock and status check if needed
-        [[deprecated("unlock()는 특별한 경우가 아니면 사용을 지양하십시오. 가드 수명 범위를 좁히세요.")]]
+        [[deprecated("Avoid using unlock() unless in special cases. Narrow down guard lifetime.")]]
         void unlock();
         bool owns_lock() const;
 
     protected:
-        // ⚠ protected: 외부 코드에서 직접 포인터를 꺼내 쓰는 헬퍼를 차단(오남용 방지)
+        // ⚠ protected: block helpers that extract pointer directly from external code (prevent misuse)
         const char* guard_cstr() const;  // == (cs_ ? cs_ : s_)->c_str()
 
-        // 내부 상태
+        // internal state
         std::string* s_ = nullptr;
         const std::string* cs_ = nullptr;
         std::unique_lock<std::mutex> lock_;
 
-        // 디버그 재진입 제어용
 #ifndef NDEBUG
+        // debug-only reentrancy control
         const MutexString* owner_ = nullptr;
         bool mark_set_ = false;
 #endif
 
-        friend class MutexString; // MutexString 내부에서 접근 가능
+        friend class MutexString; // MutexString can access internally
     };
 
-    // RAII pointer guard(internal use)
-    // - get()/operator const char*() 제공
-    // - keep lock during object lifetime → 함수 인자에 바로 넣어도 호출 동안 안전
+    // RAII pointer guard (internal use)
+    // - provides get()/operator const char*()
+    // - keeps lock during object lifetime → safe to pass directly as function arguments
     class CStrGuard {
     public:
         CStrGuard(const std::string& s, std::mutex& m);
         const char* get() const { return p_; }
-        operator const char*() const { return p_; } // 직접 인자 전달 허용
+        operator const char*() const { return p_; } // allow direct argument passing
         CStrGuard(const CStrGuard&) = delete;
         CStrGuard& operator=(const CStrGuard&) = delete;
     private:
@@ -67,10 +67,10 @@ public:
     };
 
 public:
-    // ===== 생성/대입 =====
+    // ===== constructors/assignments =====
     MutexString() = default;                 // empty string
 
-    // ⬇⬇⬇ explicit 제거 → "j2::MutexString ms = "start";" / "jstr ms = "start";" 가능
+    // ⬇⬇⬇ explicit removed → allows "j2::MutexString ms = \"start\";" / "jstr ms = \"start\";"
     MutexString(std::string s);
     MutexString(const char* s);
 
@@ -79,11 +79,11 @@ public:
     MutexString& operator=(const MutexString& other);
     MutexString& operator=(MutexString&& other) noexcept;
 
-    // 표준 문자열/char* 대입 (쓰기)
+    // assignment from std::string/char* (write)
     MutexString& operator=(const std::string& rhs);
     MutexString& operator=(const char* rhs);
 
-    // 비교 (읽기)
+    // comparison (read)
     bool operator==(const std::string& rhs) const;
     bool operator==(const char* rhs) const;
     bool operator!=(const std::string& rhs) const { return !(*this == rhs); }
@@ -93,7 +93,7 @@ public:
     friend inline bool operator!=(const std::string& lhs, const MutexString& rhs) { return !(rhs == lhs); }
     friend inline bool operator!=(const char* lhs, const MutexString& rhs) { return !(rhs == lhs); }
 
-    // ===== 용량/상태 =====
+    // ===== capacity/status =====
     std::size_t size() const;
     std::size_t length() const;
     bool empty() const;
@@ -102,18 +102,18 @@ public:
     void reserve(std::size_t n);
     void shrink_to_fit();
 
-    // ===== 요소 접근(읽기 전용 값 반환) + 짧은 setter =====
-    // note: 참조 반환(operator[], at의 char&)은 안전 문제로 제공하지 않음
+    // ===== element access (read-only value return) + short setters =====
+    // note: returning reference (operator[], at with char&) is not provided due to safety concerns
     char at(std::size_t pos) const;
-    char operator[](std::size_t pos) const;     // 읽기 전용 값 반환
-    char front() const;                          // 게터
-    char back() const;                           // 게터
+    char operator[](std::size_t pos) const;     // read-only value return
+    char front() const;                          // getter
+    char back() const;                           // getter
 
-    void set(std::size_t pos, char ch);         // set_at 대체 (짧은 이름)
-    void front(char ch);                         // setter 오버로드
-    void back(char ch);                          // setter 오버로드
+    void set(std::size_t pos, char ch);         // set_at alternative (short name)
+    void front(char ch);                         // setter overload
+    void back(char ch);                          // setter overload
 
-    // ===== 수정 =====
+    // ===== modifiers =====
     void clear();
     void push_back(char ch);
     void pop_back();
@@ -122,7 +122,7 @@ public:
     void assign(const char* s);
     void assign(std::size_t count, char ch);
 
-    // append (체이닝: MutexString& 반환)
+    // append (chained: returns MutexString&)
     MutexString& append(const std::string& s);
     MutexString& append(const char* s);
     MutexString& append(std::size_t count, char ch);
@@ -150,10 +150,10 @@ public:
     void resize(std::size_t n, char ch);
 
     // swap
-    void swap(MutexString& other);          // MutexString 간
-    void swap(std::string& other_str);      // 내부 문자열과 std::string 간
+    void swap(MutexString& other);          // between MutexStrings
+    void swap(std::string& other_str);      // between internal string and std::string
 
-    // ===== 문자열 연산 =====
+    // ===== string operations =====
     std::string substr(std::size_t pos = 0, std::size_t count = std::string::npos) const;
     std::size_t copy(char* dest, std::size_t count, std::size_t pos = 0) const;
 
@@ -184,16 +184,16 @@ public:
     std::size_t find_last_not_of(const char* s, std::size_t pos = std::string::npos) const;
     std::size_t find_last_not_of(char ch, std::size_t pos = std::string::npos) const;
 
-    // ===== 안전 편의 =====
+    // ===== safe convenience =====
     std::string str() const;
 
-    // 람다로 잠금 범위 실행: with_lock()/with() (짧은 별칭)
-    // ⚠️ 디버그 모드에서: with() 범위 안에서 같은 객체의 다른 멤버를 호출하면 assert
+    // run lock scope with lambda: with_lock()/with() (short alias)
+    // ⚠️ in debug mode: calling other members of the same object inside with() scope will trigger assert
     template <typename Fn>
     auto with_lock(Fn&& f) -> decltype(std::forward<Fn>(f)(std::declval<std::string&>())) {
 #ifndef NDEBUG
-        assert_not_reentrant_();               // 같은 스레드의 재진입 방지
-        ReentrancyMark _rmk{this};             // with() 수명 동안 "이 객체 while lock is held" 표시
+        assert_not_reentrant_();               // prevent reentrancy on same thread
+        ReentrancyMark _rmk{this};             // mark "this object lock held" during with() lifetime
 #endif
         std::scoped_lock lock(m_);
         return std::forward<Fn>(f)(s_);
@@ -216,46 +216,46 @@ public:
         return with_lock(std::forward<Fn>(f));
     }
 
-    // 풀 API 접근(반복자/포인터 포함)
+    // full API access (including iterators/pointers)
     [[nodiscard]] Locked synchronize();
     [[nodiscard]] Locked synchronize() const;
 
-    // 짧은 별칭
+    // short alias
     [[nodiscard]] Locked guard() { return synchronize(); }
     [[nodiscard]] Locked guard() const { return synchronize(); }
 
 protected:
-    // ⚠ protected: RAII c_str() 헬퍼도 외부에 노출하지 않음(오남용 방지)
+    // ⚠ protected: RAII c_str() helper is not exposed externally (prevent misuse)
     CStrGuard c_str() const;
 
-    // 디버그 재진입 검사용 헬퍼/마크
 #ifndef NDEBUG
+    // debug-only reentrancy check helper/mark
     static thread_local const MutexString* tls_owner_;
     void assert_not_reentrant_() const {
-        // 동일 스레드에서 이미 이 객체의 inside lock context이라면 no reentrancy
-        assert(tls_owner_ != this && "reentrancy detection: with()/guard() 범위 안에서 다시 ms.* 호출 금지. "
-                                     "with() 내부에서는 넘겨준 std::string(s)만 조작하세요.");
+        // if already inside this object's lock context in the same thread → no reentrancy
+        assert(tls_owner_ != this && "reentrancy detected: do not call ms.* again inside with()/guard() scope. "
+                                     "Inside with(), only manipulate the provided std::string(s).");
     }
     struct ReentrancyMark {
         const MutexString* prev;
         ReentrancyMark(const MutexString* self) : prev(tls_owner_) {
-            // 이미 다른 객체가 표시돼도, 동일 객체 재진입만 금지
-            assert(tls_owner_ != self && "동일 객체 no reentrancy");
+            // even if another object is marked, only prevent reentrancy for the same object
+            assert(tls_owner_ != self && "no reentrancy for same object");
             tls_owner_ = self;
         }
         ~ReentrancyMark() { tls_owner_ = prev; }
     };
 #endif
 
-    // 파생 클래스에서 직접 접근 가능
+    // accessible directly by derived classes
     std::string        s_;
     mutable std::mutex m_;
 };
 
-// non-member swap (ADL 대상)
+// non-member swap (ADL target)
 inline void swap(MutexString& a, MutexString& b) { a.swap(b); }
 
 } // namespace j2
 
-// alias: 전역에서 use shortly하고 싶을 때 (예: jstr ms = "start";)
+// alias: to use shortly in global scope (e.g., jstr ms = "start";)
 using jstr = j2::MutexString;
