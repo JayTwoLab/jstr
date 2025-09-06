@@ -4,7 +4,23 @@
 
 [Korean](README.ko.md)
 
+---
 
+## 0. Summary of `jstr`
+
+`jstr` is an alias for **`j2::MutexString`**, a thread-safe wrapper around `std::string`.
+Its main purpose is to allow **safe concurrent access** to string data in multi-threaded environments.
+
+* **Mutex Protection**: Internally uses a `std::mutex` to guard all operations.
+* **API Compatibility**: Provides most of the `std::string`-like functions (`append`, `insert`, `replace`, `find`, etc.) with similar signatures.
+* **Safe Access Patterns**:
+
+  * **Snapshots** (`str()`): return a full copy, safe to pass outside.
+  * **Guarded Access** (`guard()`): lock scope where you can safely use pointers, iterators, or references.
+  * **Atomic Operations** (`with()`): execute multiple steps atomically under a single lock.
+* **Reentrancy Protection**: In debug mode, prevents unsafe nested calls (asserts on re-entry).
+
+👉 In short: `jstr` behaves like `std::string`, but with **built-in thread-safety** for multi-threaded programs.
 
 ---
 
